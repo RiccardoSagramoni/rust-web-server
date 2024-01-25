@@ -12,7 +12,7 @@ fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let pool = ThreadPool::build(4).unwrap();
     
-    for stream in listener.incoming() {
+    for stream in listener.incoming().take(2) {
         match stream {
             Ok(stream) => {
                 pool.execute(|| {
@@ -42,7 +42,7 @@ fn handle_connection(mut stream: TcpStream) -> Result<(), Box<dyn Error>> {
         "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "html/hello.html"),
         "GET /sleep HTTP/1.1" => {
             // Simulate a slow request
-            thread::sleep(Duration::from_secs(5));
+            thread::sleep(Duration::from_secs(10));
             ("HTTP/1.1 200 OK", "html/hello.html")
         }
         _ => ("HTTP/1.1 404 NOT FOUND", "html/404.html"),
