@@ -13,9 +13,12 @@ pub struct ThreadPool {
 }
 
 impl ThreadPool {
-    /// Create a new ThreadPool.
+    /// Create a new `ThreadPool`.
     ///
     /// The size is the number of threads in the pool.
+    /// 
+    /// # Errors
+    /// Returns an error if the size is zero or a worker failed to spawn
     pub fn build(size: usize) -> Result<ThreadPool, PoolCreationError> {
         if size == 0 {
             return Err(PoolCreationError::ZeroSize);
@@ -39,13 +42,20 @@ impl ThreadPool {
     }
     
     
+    /// Find a worker to execute the job.
+    /// 
+    /// # Errors
+    /// Returns an error if it's not possible to communicate with workers throught the channel.
+    /// 
+    /// # Panics
+    /// If `self.sender` is None (it should never be None, except inside the `drop` method)
     pub fn execute<F>(&self, f: F) -> Result<(), PoolExecuteError>
     where
         F: FnOnce() + Send + 'static,
     {
         self.sender
             .as_ref()
-            .unwrap()
+            .expect("sender should never be None")
             .send(Box::new(f))
             .map_err(|e| PoolExecuteError::JobCreationError(e.to_string()))
     }
@@ -82,14 +92,9 @@ impl Worker {
         receiver: Arc<Mutex<mpsc::Receiver<Job>>>,
     ) -> Result<Self, WorkerCreationError> {
         let thread = thread::Builder::new().spawn(move || loop {
-            let job = match receiver.lock().unwrap().recv() {
-                Ok(job) => {
-                    job
-                }
-                Err(_) => {
-                    println!("> Worker {id} disconnected; shutting down.");
-                    return;
-                }
+            let Ok(job) = receiver.lock().unwrap().recv() else {
+                println!("> Worker {id} disconnected; shutting down.");
+                return;
             };
             
             println!("> Worker {id} got a job; executing.");
